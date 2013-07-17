@@ -13,8 +13,10 @@ module Rack
     MAX_REQUEST_AGE = 30 # seconds
     @overtime       = 60 # seconds by which to extend MAX_REQUEST_AGE for requests that have a body (and have hence potentially waited long for the body to be received.)
     @timeout        = 15 # seconds
+    @simple_errors = false # if we use batched errors, all RequestTimeoutErrors have the same message, allowing things like Airbrake to properly aggregate the errors
+
     class << self
-      attr_accessor :timeout, :overtime
+      attr_accessor :timeout, :overtime, :simple_errors
     end
 
     def initialize(app)
@@ -50,7 +52,9 @@ module Rack
             sleep(sleep_seconds)
           end
           Rack::Timeout._set_state! env, :timed_out
-          app_thread.raise(RequestTimeoutError, "Request ran for longer than #{info.timeout} seconds.")
+
+          timeout_message = simple_errors ? self.class.timeout : info_timeout
+          app_thread.raise(RequestTimeoutError, "Request ran for longer than #{timeout_message} seconds.")
         end
         response = @app.call(env)
       ensure
